@@ -1,5 +1,10 @@
 name: 'Run Volttron Tests'
-description: 'Runs tests suite using Pytest'
+auther: Mark Bonicillo
+description: 'Runs Volttron tests suite using Pytest'
+branding:
+  icon: zap
+  color: green
+
 inputs:
   os:
     description: os type
@@ -7,16 +12,64 @@ inputs:
   python_version:
     description: python version
     required: yes
+  test_path:
+    description: path to Volttron test
+    required: yes
+  test_output_suffix:
+    description: suffix for test output
+    required: yes
+
+#  Reference syntax for 'composite' runs: https://docs.github.com/en/actions/creating-actions/metadata-syntax-for-github-actions#runs-for-composite-run-steps-actions
 runs:
   using: "composite"
   steps:
-    - name: Run Volttron tests
-      run: ${{ github.action_path }}/run-pytest.sh
+    - name: Install Erlang for RabbitMQ
+      run: |
+        if [[ "$OS" != 'ubuntu-20.04' ]]; then
+          echo 'Installing erlang'
+          sudo scripts/rabbit_dependencies.sh debian ${{ inputs.os }}
+        fi
       shell: bash
-    - name: Archive test results
-      uses: actions/upload-artifact@v2
-      if: always()
-      with:
-        name: pytest-report
-        path: output/test-testutils-${{inputs.os}}-${{ inputs.python_version }}-results.xml
+      env:
+        OS: ${{ inputs.os }}
 
+    - name: Install dependencies including rmq
+      run: |
+        if [[ ! -f "$FILE" ]] && [[ "$OS" != 'ubuntu-20.04' ]]; then
+          echo 'Installing all volttron dependencies and RMQ'
+          pip install wheel
+          python bootstrap.py --all --rabbitmq --force
+        fi
+      shell: bash
+      env:
+        OS: ${{ inputs.os }}
+        FILE: env/bin/activate
+
+    - name: Install dependencies other than rmq
+      run: |
+        if [[ ! -f "$FILE" ]] && [[ "$OS" == 'ubuntu-20.04' ]]; then
+          echo 'Installing all Volttron dependencies but NOT RMQ'
+          pip install wheel
+          python bootstrap.py --all --force
+        fi
+      shell: bash
+      env:
+        OS: ${{ inputs.os }}
+        FILE: env/bin/activate
+
+    - name: Install volttron
+      run: |
+        source env/bin/activate
+        pip install -e .
+      shell: bash
+
+    - name: Run Volttron tests
+      run: |
+        source env/bin/activate
+        pip install -e .
+        echo "the test path $TEST_PATH and $TEST_OUTPUT_SUFFIX"
+        pytest "$TEST_PATH" -rf -o junit_family=xunit2 --junitxml=output/test-$TEST_OUTPUT_SUFFIX-${{ inputs.os }}-${{ inputs.python_version }}-results.xml
+      shell: bash
+      env:
+        TEST_PATH: ${{ inputs.test_path }}
+        TEST_OUTPUT_SUFFIX: ${{ inputs.test_output_suffix }}
