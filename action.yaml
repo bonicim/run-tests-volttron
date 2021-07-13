@@ -1,5 +1,10 @@
 name: 'Run Volttron Tests'
-description: 'Runs tests suite using Pytest'
+auther: Mark Bonicillo
+description: 'Runs Volttron tests suite using Pytest'
+branding:
+  icon: zap
+  color: green
+
 inputs:
   os:
     description: os type
@@ -7,16 +12,33 @@ inputs:
   python_version:
     description: python version
     required: yes
+
+# Reference syntax for 'composite' runs: https://docs.github.com/en/actions/creating-actions/metadata-syntax-for-github-actions#runs-for-composite-run-steps-actions
 runs:
   using: "composite"
   steps:
-    - name: Run Volttron tests
-      run: ${{ github.action_path }}/run-pytest.sh
+    - name: Install Erlang for RabbitMQ
+      run: |
+        sudo scripts/rabbit_dependencies.sh debian ${{ inputs.os }}
       shell: bash
-    - name: Archive test results
-      uses: actions/upload-artifact@v2
-      if: always()
-      with:
-        name: pytest-report
-        path: output/test-testutils-${{inputs.os}}-${{ inputs.python_version }}-results.xml
-
+    - name: Install dependencies including rmq
+      run: |
+        pip install wheel
+        python bootstrap.py --all --rabbitmq --force
+      shell: bash
+    - name: Install dependencies other than rmq
+      run: |
+        pip install wheel
+        python bootstrap.py --all --force
+      shell: bash
+    - name: Install volttron
+      run: |
+        source env/bin/activate
+        pip install -e .
+      shell: bash
+    - name: Run Volttron tests
+      run: |
+        source env/bin/activate
+        pip install -e .
+        pytest volttrontesting/testutils -rf -o junit_family=xunit2 --junitxml=output/test-testutils-${{ inputs.os }}-${{ inputs.python_version }}-results.xml
+      shell: bash
