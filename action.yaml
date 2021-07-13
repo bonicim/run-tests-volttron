@@ -1,0 +1,22 @@
+name: 'Run Volttron Tests'
+description: 'Runs tests suite using Pytest'
+inputs:
+  os:
+    description: os type
+    required: yes
+  python_version:
+    description: python version
+    required: yes
+runs:
+  using: "composite"
+  steps:
+    - name: Run Volttron tests
+      run: ${{ github.action_path }}/run-pytest.sh
+      shell: bash
+    - name: Archive test results
+      uses: actions/upload-artifact@v2
+      if: always()
+      with:
+        name: pytest-report
+        path: output/test-testutils-${{inputs.os}}-${{ inputs.python_version }}-results.xml
+
